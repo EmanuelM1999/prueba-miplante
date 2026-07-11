@@ -1,66 +1,122 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+A1. Respuesta: El problema que se encuentra en la lógica está en el cálculo del IVA de la fianza, ya que actualmente este IVA se calcula con base en el subtotal, lo cual es incorrecto, porque únicamente debe calcularse sobre el valor total de la fianza. Para resolver este inconveniente, utilizo una variable llamada $totalFianza, que se encarga de almacenar el valor total de la fianza para posteriormente calcular el IVA sobre este valor y sumarlo tanto el total de la fianza y el IVA de la misma al total que se devuelve en el método.
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+// app/Services/CheckoutService.php
+public function calcularTotal(array $items, float $tasaFianza): float
+{
+    $subtotal = 0;
+    $totalFianza = 0;
 
-## About Laravel
+    foreach ($items as $item) {
+	// $item = ['precio' => 1200000, 'cantidad' => 2]
+        $valorItem = $item['precio'] * $item['cantidad'];
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+        $subtotal += $valorItem;
+        $totalFianza += $valorItem * $tasaFianza;
+    }
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+    $ivaFianza = $totalFianza * 0.19;
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+    return $subtotal + $totalFianza + $ivaFianza;
+}
 
-## Learning Laravel
+A2. Respuesta: Sí tiene riesgos a nivel de seguridad, ya que al utilizar la línea de código $solicitud->update($request->all()); estamos permitiendo una asignación masiva, haciendo que todo lo que llegue en la petición pueda actualizarse, siempre y cuando esté definido en $fillable. Además, teniendo en cuenta que el método únicamente debe actualizar datos de contacto, es mejor impedir la modificación de campos sensibles como estado, cupo_asignado o rol_usuario.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+Para solucionarlo, implementaría una validación que garantice la integridad de los datos y limite la actualización únicamente a los campos permitidos. Incluso, para mantener un código más limpio, utilizaría un Form Request para separar la lógica de validación del controlador.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+// app/Http/Controllers/SolicitudController.php
+public function update(Request $request, Solicitud $solicitud) 
+{ 
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+    $data = $request->validate([ 
+      'nombre' => 'required|string|max:255', 
+      'telefono' => 'required|string|max:20', 
+      'direccion' => 'required|string|max:255'
+    ]); 
 
-## Laravel Sponsors
+    $solicitud->update($data); 
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+    return back()->with('ok', 'Datos actualizados'); 
+}
 
-### Premium Partners
+A3. Respuesta: En este caso considero que, para evitar un descuadre de unidades cuando se trata de la última disponible, se puede implementar una transacción a nivel de base de datos utilizando lockForUpdate(). Este método bloquea el registro mientras se validan las unidades disponibles y se actualiza el stock, haciendo que cualquier otra compra del mismo producto espere a que termine la transacción. De esta manera, el stock se mantiene consistente y se evita vender más unidades de las disponibles.
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+use Illuminate\Support\Facades\DB;
 
-## Contributing
+// app/Services/InventarioService.php
+public function comprar(int $productoId, int $cantidad): void
+{
+    DB::transaction(function () use ($productoId, $cantidad) {
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+        $producto = Producto::lockForUpdate()->find($productoId);
 
-## Code of Conduct
+        if ($producto->stock >= $cantidad) {
+            // ... procesa el pago ...
+            $producto->stock = $producto->stock - $cantidad;
+            $producto->save();
+        } else {
+            throw new \Exception('Sin stock');
+        }
+    });
+}
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+A4. Respuesta: Analizando la lógica mostrada, el problema es que el webhook no realiza ningún tipo de validación del origen de la petición (por ejemplo, mediante un middleware o un token de autenticación), que garantice que realmente proviene de Certicámara. Esto permite que cualquier cliente pueda realizar una petición al endpoint y cambiar el estado de un pagaré a FIRMADO.
 
-## Security Vulnerabilities
+Lo ideal sería proteger el endpoint mediante un token o el mecanismo de autenticación que se defina, garantizando que únicamente este proveedor pueda consumir el webhook. Como medida adicional, implementaría el uso de logs para llevar un seguimiento y facilitar la auditoría.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+A5. Respuesta: Sí existe un problema de privacidad, ya que se exponen datos sensibles como el score_credito, el cual, desde mi punto de vista, es innecesario para el propósito del log, que únicamente es informar que se está realizando una validación de identidad. También considero innecesario registrar el OTP, ya que, aunque tenga un tiempo de vida limitado, sigue siendo información sensible que no debería quedar almacenada.
 
-## License
+En este caso dejaría el código de la siguiente manera:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+// app/Services/IdentidadService.php
+Log::info('Validando identidad', [
+    'cedula'      => $cliente->cedula,
+]);
+
+B1. Respuesta: Escogí desarrollar la opción 1, la cual consiste en implementar un endpoint que recibe una lista de cuotas de un crédito y devuelve un resumen con el total a pagar, el número de cuotas y la fecha de la última cuota.
+
+Endpoint:
+
+Método: POST
+URL: /api/credito/resumen
+
+Ejemplo de petición:
+
+{
+    "cuotas": [
+        {
+            "valor": 100000,
+            "fecha": "2026-08-15"
+        },
+        {
+            "valor": 100000,
+            "fecha": "2026-09-15"
+        },
+        {
+            "valor": 100000,
+            "fecha": "2026-10-15"
+        }
+    ]
+}
+
+Respuesta esperada:
+
+{
+    "code": 200,
+    "message": "Resumen generado correctamente",
+    "data": {
+        "total_pagar": 300000,
+        "numero_cuotas": 3,
+        "ultima_cuota": "2026-10-15"
+    }
+}
+
+Para la implementación se utilizó un Form Request para centralizar las validaciones de la petición, un Service para encapsular la lógica de negocio, manejo de excepciones y registro de logs para facilitar el seguimiento de la ejecución. Adicionalmente, se implementaron pruebas automatizadas para validar tanto el caso exitoso como los diferentes escenarios de error por validación.
+
+
+C4. Respuesta: En este caso buscaría reproducir el escenario en el que ocurre el error de cálculo que genera cobros superiores a algunos clientes, ya que el enunciado indica que no afecta a todos. Haría esta reproducción en un ambiente de pruebas o desarrollo (por ejemplo, desplegando la aplicación de forma local). A partir de ahí, revisaría todos los métodos involucrados en el proceso de cálculo con el fin de identificar exactamente dónde y por qué se está produciendo el error. De esta manera, evitaría modificar código que no tenga relación con el problema y que pudiera afectar otras funcionalidades.
+
+Una vez identificada la causa, realizaría la corrección en la lógica con el menor impacto posible. Posteriormente, probaría nuevamente con los clientes que presentan la novedad para verificar que el problema fue solucionado y, además, ejecutaría pruebas con clientes que no presentan el inconveniente para asegurar que el ajuste no afecte otros escenarios. Finalmente, si todas las validaciones son satisfactorias, desplegaría el cambio al ambiente de producción y realizaría un monitoreo para confirmar que la solución funciona correctamente.
+
+C5. Respuesta: La diferencia entre ambos conceptos es que la autenticación tiene como objetivo validar que un usuario sea quien dice ser, normalmente mediante credenciales como usuario y contraseña. Por otro lado, la autorización tiene como propósito determinar qué acciones puede realizar ese usuario dentro del sistema, de acuerdo con los permisos que tenga asignados. En un sistema como el mencionado, es importante garantizar que la información relacionada con los cupos de crédito solo pueda ser consultada o modificada por los usuarios autorizados, preservando así la seguridad e integridad de los datos.
+
+C6. Respuesta: Las medidas que tomaría serían implementar timeouts en las peticiones para evitar esperas prolongadas que puedan generar saturación en el servidor; además, implementaría una lógica de reintentos para manejar fallos temporales. También realizaría un manejo adecuado de las excepciones, evitando que una falla del servicio externo interrumpa los procesos de la aplicación. Como medidas adicionales, utilizaría logs para facilitar el monitoreo y el diagnóstico de errores y, cuando el proceso lo permita, implementaría colas para procesar las solicitudes de forma asíncrona y mejorar la experiencia del usuario.
