@@ -2,22 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Http\Requests\Credito\ResumenRequest;
 
 class CreditoController extends Controller
 {
-    public function resumen(Request $request)
-    {
-        $data = $request->validate([
-            'cuotas' => 'required|array|min:1',
-            'cuotas.*.valor' => 'required|numeric|min:0',
-            'cuotas.*.fecha' => 'required|date',
-        ]);
+    //Metodo que me devuelve el resumen del credito
+    public function resumen(ResumenRequest $request)
+    {      
+        //Variable necesaria para contar los registros que se reciben.  
+        $cuotas = $request['cuotas'];
 
-        $cuotas = $data['cuotas'];
-
+        //Suma el valor total de las cuotas que llegan
         $total = collect($cuotas)->sum('valor');
 
+        //Toma la fecha de la última cuota
         $ultimaFecha = collect($cuotas)
             ->max('fecha');
 
