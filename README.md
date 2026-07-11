@@ -6,7 +6,7 @@
 
 ## A1. Respuesta
 
-El problema que se encuentra en la lógica está en el cálculo del IVA de la fianza, ya que actualmente este IVA se calcula con base en el subtotal, lo cual es incorrecto, porque únicamente debe calcularse sobre el valor total de la fianza. Para resolver este inconveniente, utilizo una variable llamada **$totalFianza**, que se encarga de almacenar el valor total de la fianza para posteriormente calcular el IVA sobre este valor y sumarlo tanto al total de la fianza como al total que se devuelve en el método.
+El problema que se encuentra en la lógica está en el cálculo del IVA de la fianza, ya que actualmente este IVA se calcula con base en el subtotal, lo cual es incorrecto, porque únicamente debe calcularse sobre el valor total de la fianza. Para resolver este inconveniente, utilizo una variable llamada **$totalFianza**, que se encarga de almacenar el valor total de la fianza para posteriormente calcular el IVA sobre este valor y sumarlo al valor total que se devuelve en el método.
 
 ```php
 // app/Services/CheckoutService.php
