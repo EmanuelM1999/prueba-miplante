@@ -23,6 +23,10 @@ class CreditoController extends Controller
 
         $resultado = $this->creditoService->resumen($cuotas);
 
-        return response()->json($resultado, 200);
+        return response()->json([
+            'code' => 200,
+            'message' => 'Resumen generado correctamente',
+            'data' => $resultado
+        ], 200);
     }
 }
